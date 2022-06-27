@@ -156,10 +156,6 @@ class MOHB:
     def f_objective(self, config, budget=None, **kwargs):
         if self.f is None:
             raise NotImplementedError("An objective function needs to be passed.")
-        # if self.encoding:
-        #     x = self.map_to_original(x)
-        # converts [0, 1] vector to a ConfigSpace object
-
         if budget is not None:  # to be used when called by multi-fidelity based optimizers
             res = self.f(config, budget=budget, **kwargs)
         else:
@@ -324,8 +320,6 @@ class MOHB:
     def _acquire_config(self, bracket, budget):
         """ Generates/chooses a configuration based on the budget and iteration number
         """
-        # identify lower budget/fidelity to transfer information from
-
         assert budget in bracket.budgets
 
         if budget not in bracket.trials:
@@ -337,16 +331,22 @@ class MOHB:
                 trials = [Trial(individual) for individual in population]
 
             #Promote candidates from lower budget for next rung
-            elif budget not in bracket.trials:
+            else:
+                # identify lower budget/fidelity to transfer information from
                 lower_budget, n_configs = bracket.get_lower_budget_promotions(budget)
                 candidate_trials = bracket.trials[lower_budget]
+
+                #get fitness of candidates
                 fitness = [trial.get_fitness() for trial in candidate_trials]
                 logger.debug(f'trials fitness:{fitness}')
+
+                # sort candidates according to fitness
                 sorted_index = np.argsort(fitness)
                 logger.debug(f'sorted index:{sorted_index}')
                 trials = np.array(candidate_trials)[sorted_index][:n_configs]
                 logger.debug(f'trial promoted from budget:{lower_budget} to budget:{budget}:{trials}')
 
+            #populate the trials for the budget
             bracket.trials[budget] = trials
 
         logger.debug(f'budget:{budget}')
