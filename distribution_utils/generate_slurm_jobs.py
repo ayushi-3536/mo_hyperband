@@ -3,7 +3,7 @@ Generates 2 scripts to deploy a Dask cluster to SLURM.
 
 Example use:
 ```
-python utils/generate_slurm_jobs.py --worker_p [gpu_node] --scheduler_p [cpu_node] --gpu \
+python distribution_utils/generate_slurm_jobs.py --worker_p [gpu_node] --scheduler_p [cpu_node] --gpu \
     --nworkers 4 --scheduler_path ./scheduler --output_path temp --setup_file ./setup.sh`
 ```
 

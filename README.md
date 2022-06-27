@@ -64,7 +64,7 @@ created to interface the `dask-scheduler` by connecting to the details read from
 dask-worker can be triggered on any remote machine. Each worker can be configured as required, 
 including mapping to specific GPU devices. 
 
-Some helper scripts can be found [here](utils/), that can be used as reference to run MOHB in a multi-node 
+Some helper scripts can be found [here](distribution_utils/), that can be used as reference to run MOHB in a multi-node 
 manner on clusters managed by SLURM. (*not expected to work off-the-shelf*)
 
 To run the PyTorch MNIST example on a multi-node setup using 4 workers:

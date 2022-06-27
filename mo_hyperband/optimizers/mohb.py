@@ -8,8 +8,10 @@ from typing import List
 from copy import deepcopy
 from loguru import logger
 from distributed import Client
-from mo_hyperband.optimizers import Trial
+from mo_hyperband.utils import Trial
 from mo_hyperband.utils import SHBracketManager
+from mo_hyperband.utils import multi_obj_util
+
 logger.configure(handlers=[{"sink": sys.stdout, "level": "DEBUG"}])
 _logger_props = {
     "format": "{time} {level} {message}",
@@ -18,18 +20,13 @@ _logger_props = {
 }
 
 
-
 class MOHB:
-    def __init__(self, cs=None, f=None, min_budget=None,
+    def __init__(self, cs=None, f=None, objectives=None, min_budget=None, mo_strategy=None,
                  max_budget=None, eta=3, min_clip=None, max_clip=None, n_workers=None, client=None, **kwargs):
 
         self.iteration_counter = -1
         self.cs = cs
         self.f = f
-        self.mo_params = {
-            "cs": self.cs,
-            "f": f
-        }
 
         # Hyperband related variables
         self.min_budget = min_budget
@@ -38,6 +35,12 @@ class MOHB:
         self.eta = eta
         self.min_clip = min_clip
         self.max_clip = max_clip
+        self.objectives = objectives
+        self.mo_strategy = mo_strategy
+
+        n_weights = self.mo_strategy.get('num_weights', 100)
+        self.weights = [multi_obj_util.uniform_from_unit_simplex(len(self.objectives))
+                   for _ in range(n_weights)]
 
         # Precomputing budget spacing and number of configurations for HB iterations
         self.max_SH_iter = None
@@ -61,11 +64,8 @@ class MOHB:
             **_logger_props
         )
         self.log_filename = "{}/mohb_{}.log".format(self.output_path, log_suffix)
-        # Updating MO parameter list
-        self.mo_params.update({"output_path": self.output_path})
 
-        self.inc_score = np.inf
-        self.inc_config = None
+        self.pareto_trials = []
         self.history = []
         self.hb_bracket_tracker = {}
         self._max_pop_size = None
@@ -97,9 +97,33 @@ class MOHB:
         self.gpu_usage = None
         self.single_node_with_gpus = None
 
+    # Adapted from Autogluon
+    def scalarize(self, functional_values):
+        """Report updated training status.
+
+        Args:
+            functional_values: Latest training result status. Reporter requires access to
+            all objectives of interest.
+
+        """
+
+        v = np.array(functional_values)
+        if self.mo_strategy["algorithm"] == "random_weights":
+            scalarization = max([w @ v for w in self.weights])
+        elif self.mo_strategy["algorithm"] == "parego":
+            rho = self.scalarization_options["rho"]
+            scalarization = [max(w * v) + rho * (w @ v) for w in self.weights]
+            scalarization = max(scalarization)
+        elif self.mo_strategy["algorithm"] == "golovin":
+            scalarization = [np.min(np.clip(v / w, a_min=0, a_max=None)) ** len(w) for w in self.weights]
+            scalarization = max(scalarization)
+        else:
+            raise ValueError("Specified scalarization algorithm is unknown. \
+                Valid algorithms are 'random_weights' and 'parego'.")
+        return scalarization
+
     def reset(self):
-        self.inc_score = np.inf
-        self.inc_config = None
+        self.pareto_trials = []
         self.population = None
         self.fitness = None
         self.traj = []
@@ -160,7 +184,7 @@ class MOHB:
             res = self.f(config, budget=budget, **kwargs)
         else:
             res = self.f(config, **kwargs)
-        assert "fitness" in res
+        assert "function_value" in res
         assert "cost" in res
         return res
 
@@ -179,7 +203,7 @@ class MOHB:
         res = self.f_objective(config, budget, **kwargs)
         info = res["info"] if "info" in res else dict()
         run_info = {
-            'fitness': res["fitness"],
+            'fitness': res["function_value"],
             'cost': res["cost"],
             'config': config,
             'budget': budget,
@@ -230,8 +254,6 @@ class MOHB:
         for _id in self.available_gpus:
             self.gpu_usage[_id] = 0
 
-
-
     def reset(self):
         super().reset()
         if self.n_workers > 1 and hasattr(self, "client") and isinstance(self.client, Client):
@@ -246,11 +268,11 @@ class MOHB:
         self.active_brackets = []
         self.traj = []
         self.runtime = []
+        self.pareto_trials = []
         self.history = []
         self._get_pop_sizes()
         self.available_gpus = None
         self.gpu_usage = None
-
 
     def clean_inactive_brackets(self):
         """ Removes brackets from the active list if it is done as communicated by Bracket Manager
@@ -267,10 +289,14 @@ class MOHB:
         self.runtime.append(runtime)
         self.history.append(history)
 
-    def _update_incumbents(self, config, score, info):
-        self.inc_config = config
-        self.inc_score = score
-        self.inc_info = info
+    def _update_pareto(self, trial):
+        paretos = self.pareto_trials
+        paretos.append(trial)
+        fitness = [trial.get_fitness() for trial in paretos]
+        logger.debug(f'pareto fitness:{fitness}')
+        index_list = np.array(range(len(fitness)))
+        is_pareto, _ = multi_obj_util.pareto_index(np.array(fitness), index_list)
+        self.pareto_trials = list(np.array(paretos)[is_pareto])
 
     def _get_pop_sizes(self):
         """Determines maximum pop size for each budget
@@ -326,34 +352,39 @@ class MOHB:
 
             # init population randomly for base rung
             if budget == bracket.budgets[0]:
+                logger.debug(f'Randomly initializing population for budget:{budget} and bracket:{bracket.bracket_id}')
                 pop_size = bracket.n_configs[0]
                 population = self.cs.sample_configuration(size=pop_size)
-                trials = [Trial(individual) for individual in population]
+                trials = [Trial(individual.get_dictionary()) for individual in population]
+                logger.debug(f'Trials generated:{trials}')
 
-            #Promote candidates from lower budget for next rung
+            # Promote candidates from lower budget for next rung
             else:
                 # identify lower budget/fidelity to transfer information from
                 lower_budget, n_configs = bracket.get_lower_budget_promotions(budget)
+                logger.debug(f'Promoting configuration from budget:{lower_budget} to '
+                             f'budget:{budget} and bracket:{bracket.bracket_id}')
                 candidate_trials = bracket.trials[lower_budget]
 
-                #get fitness of candidates
+                # get fitness of candidates
                 fitness = [trial.get_fitness() for trial in candidate_trials]
                 logger.debug(f'trials fitness:{fitness}')
 
                 # sort candidates according to fitness
-                sorted_index = np.argsort(fitness)
+                scalarized_fitness = [self.scalarize(fit) for fit in fitness]
+                sorted_index = np.argsort(scalarized_fitness)
+
                 logger.debug(f'sorted index:{sorted_index}')
                 trials = np.array(candidate_trials)[sorted_index][:n_configs]
                 logger.debug(f'trial promoted from budget:{lower_budget} to budget:{budget}:{trials}')
 
-            #populate the trials for the budget
+            # populate the trials for the budget
             bracket.trials[budget] = trials
 
         logger.debug(f'budget:{budget}')
         pending_trials = bracket.get_pending_trials(budget)
-        logger.debug(f'pending trials:{pending_trials}')
+        logger.debug(f'pending trials:{len(pending_trials)}')
         return pending_trials[0]
-
 
     def _get_next_job(self):
         """ Loads a configuration and budget to be evaluated next by a free worker
@@ -451,6 +482,8 @@ class MOHB:
                 run_info = future
             # update bracket information
             fitness, cost = run_info["fitness"], run_info["cost"]
+            assert all(item in fitness.keys() for item in self.objectives)
+
             info = run_info["info"] if "info" in run_info else dict()
             budget = run_info["budget"]
             config = run_info["config"]
@@ -459,20 +492,19 @@ class MOHB:
             for bracket in self.active_brackets:
                 if bracket.bracket_id == bracket_id:
                     # bracket job complete
-                    bracket.complete_job(budget, run_info["trial"], fitness)  # IMPORTANT to perform synchronous SH
+                    logger.debug(f'fitness for config:{list(fitness.values())}')
+                    bracket.complete_job(budget, run_info["trial"],
+                                         list(fitness.values()))  # IMPORTANT to perform synchronous SH
 
-
-            # updating incumbents
-            if fitness < self.inc_score:
-                self._update_incumbents(
-                    config=config,
-                    score=fitness,
-                    info=info
+                # updating pareto
+                self._update_pareto(
+                    trial=run_info['trial']
                 )
             # book-keeping
+            pareto_fitness = [trial.get_fitness() for trial in self.pareto_trials]
             self._update_trackers(
-                traj=self.inc_score, runtime=cost, history=(
-                    config.get_dictionary, float(fitness), float(cost), float(budget), info
+                traj=pareto_fitness, runtime=cost, history=(
+                    config, dict(fitness), float(cost), float(budget), info
                 )
             )
         # remove processed future
@@ -506,19 +538,15 @@ class MOHB:
         return False
 
     def _save_incumbent(self, name=None):
+
         if name is None:
             name = time.strftime("%x %X %Z", time.localtime(self.start))
             name = name.replace("/", '-').replace(":", '-').replace(" ", '_')
         try:
-            res = dict()
-            config = self.inc_config
-            res["config"] = config.get_dictionary()
-            res["score"] = self.inc_score
-            res["info"] = self.inc_info
-            with open(os.path.join(self.output_path, "incumbent_{}.json".format(name)), 'w') as f:
-                json.dump(res, f)
+            with open(os.path.join(self.output_path, "incumbents_{}.json".format(name)), 'w') as f:
+                json.dump([ob.__dict__ for ob in self.pareto_trials], f)
         except Exception as e:
-            self.logger.warning("Incumbent not saved: {}".format(repr(e)))
+            self.logger.warning("Pareto not saved: {}".format(repr(e)))
 
     def _save_history(self, name=None):
         if name is None:
@@ -620,7 +648,7 @@ class MOHB:
                         )
                     self._verbosity_debug()
             self._fetch_results_from_workers()
-            if save_intermediate and self.inc_config is not None:
+            if save_intermediate and self.pareto_trials is not None:
                 self._save_incumbent()
             if save_history and self.history is not None:
                 self._save_history()
@@ -633,7 +661,7 @@ class MOHB:
             )
         while len(self.futures) > 0:
             self._fetch_results_from_workers()
-            if save_intermediate and self.inc_config is not None:
+            if save_intermediate and self.pareto_trials is not None:
                 self._save_incumbent()
             if save_history and self.history is not None:
                 self._save_history()
@@ -644,14 +672,13 @@ class MOHB:
             self.logger.info("End of optimisation! Total duration: {}; Total fevals: {}\n".format(
                 time_taken, len(self.traj)
             ))
-            self.logger.info("Incumbent score: {}".format(self.inc_score))
+            self.logger.info("pareto score: {}".format([trial.get_fitness() for trial in self.pareto_trials]))
+            configs = [trial.config for trial in self.pareto_trials]
             self.logger.info("Incumbent config: ")
             if self.configspace:
-                config = self.vector_to_configspace(self.inc_config)
-                for k, v in config.get_dictionary().items():
-                    self.logger.info("{}: {}".format(k, v))
-            else:
-                self.logger.info("{}".format(self.inc_config))
+                for config in configs:
+                    for k, v in config.get_dictionary().items():
+                        self.logger.info("{}: {}".format(k, v))
         self._save_incumbent()
         self._save_history()
         return np.array(self.traj), np.array(self.runtime), np.array(self.history, dtype=object)
