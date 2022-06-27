@@ -29,7 +29,7 @@ Or a client can be passed as an argument during instantiation.
     This parameter is ignored if `client` is not None.
 * Setting `client` during instantiation \
     When `None` (default), the a Dask client is created using `n_workers` specified. \
-    Else, any custom configured Dask Client can be created and passed as the `client` argument to DEHB.
+    Else, any custom configured Dask Client can be created and passed as the `client` argument to MOHB.
   
 #### Using GPUs in a parallel run
 
@@ -39,11 +39,11 @@ spawned worker processes access these devices in the same order and can either r
 not exhibit parallelism.
 
 For `n_workers>1` and when running on a single node (or local), the `single_node_with_gpus` can be 
-passed to the `run()` call to DEHB. Setting it to `False` (default) has no effect on the default setup 
+passed to the `run()` call to MOHB. Setting it to `False` (default) has no effect on the default setup 
 of the machine. Setting it to `True` will reorder the GPU device IDs dynamically by setting the environment 
 variable `CUDA_VISIBLE_DEVICES` for each worker process executing a target function evaluation. The re-ordering 
 is done in a manner that the first priority device is the one with the least number of active jobs assigned 
-to it by that DEHB run.
+to it by that MOHB run.
 
 To run the PyTorch MNIST example on a single node using 2 workers:  
 ```bash
@@ -54,7 +54,7 @@ PYTHONPATH=$PWD python examples/03_pytorch_mnist_hpo.py --min_budget 1 --max_bud
 #### Multi-node runs
 
 Multi-node parallelism is often contingent on the cluster setup to be deployed on. Dask provides useful 
-frameworks to interface various cluster designs. As long as the `client` passed to DEHB during 
+frameworks to interface various cluster designs. As long as the `client` passed to MOHB during 
 instantiation is of type `dask.distributed.Client`, MOHB can interact with this client and 
 distribute its optimisation process in a parallel manner. 
 
@@ -77,7 +77,7 @@ PYTHONPATH=$PWD python examples/03_pytorch_mnist_hpo.py --min_budget 1 --max_bud
 
 
 
-### DEHB Hyperparameters
+### MOHB Hyperparameters
 
 *We recommend the default settings*.
 The default settings were chosen based on ablation studies over a collection of diverse problems 
