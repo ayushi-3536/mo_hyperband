@@ -1,5 +1,5 @@
 """
-This script runs a Multi-Objective Hyperparameter Optimisation using MODEHB to tune the architecture and
+This script runs a Multi-Objective Hyperparameter Optimisation using MOmohb to tune the architecture and
 training hyperparameters for training a neural network on MNIST in PyTorch. It minimizes two objectives: loss and model size
 This example is an extension of single objective problem:'03_pytorch_mnist_hpo.py' to multi-objective setting
 Additional requirements:
@@ -202,7 +202,7 @@ def objective_function(config, budget, **kwargs):
     # get number of model parameters
     num_params = np.log(np.sum(p.numel() for p in model.parameters()))
 
-    # dict representation that DEHB requires
+    # dict representation that mohb requires
     res = {
         'function_value': {'loss': float(loss), 'n_params': num_params},
         "cost": cost,
@@ -212,7 +212,7 @@ def objective_function(config, budget, **kwargs):
 
 
 def input_arguments():
-    parser = argparse.ArgumentParser(description='Optimizing MNIST in PyTorch using DEHB.')
+    parser = argparse.ArgumentParser(description='Optimizing MNIST in PyTorch using mohb.')
     parser.add_argument('--no_cuda', action='store_true', default=False,
                         help='disables CUDA training')
     parser.add_argument('--seed', type=int, default=123, metavar='S',
@@ -225,26 +225,22 @@ def input_arguments():
                         help='Maximum budget (epoch length)')
     parser.add_argument('--eta', type=int, default=3,
                         help='Parameter for Hyperband controlling early stopping aggressiveness')
-    parser.add_argument('--output_path', type=str, default="./pytorch_mnist_dehb",
-                        help='Directory for DEHB to write logs and outputs')
+    parser.add_argument('--output_path', type=str, default="./pytorch_mnist_mohb",
+                        help='Directory for mohb to write logs and outputs')
     parser.add_argument('--scheduler_file', type=str, default=None,
                         help='The file to connect a Dask client with a Dask scheduler')
     parser.add_argument('--n_workers', type=int, default=1,
-                        help='Number of CPU workers for DEHB to distribute function evaluations to')
+                        help='Number of CPU workers for MOHB to distribute function evaluations to')
     parser.add_argument('--single_node_with_gpus', default=False, action="store_true",
-                        help='If True, signals the DEHB run to assume all required GPUs are on '
+                        help='If True, signals the MOHB run to assume all required GPUs are on '
                              'the same node/machine. To be specified as True if no client is '
                              'passed and n_workers > 1. Should be set to False if a client is '
                              'specified as a scheduler-file created. The onus of GPU usage is then'
                              'on the Dask workers created and mapped to the scheduler-file.')
-    mo_strategy_choices = ['RW']
-    parser.add_argument('--mo_strategy', default="RW", choices=mo_strategy_choices,
-                        type=str, nargs='?',
-                        help="specify the multiobjective  strategy from among {}".format(mo_strategy_choices))
-    parser.add_argument('--verbose', action="store_true", default=False,
-                        help='Decides verbosity of DEHB optimization')
-    parser.add_argument('--runtime', type=float, default=300,
-                        help='Total time in seconds as budget to run DEHB')
+    parser.add_argument('--verbose', action="store_true", default=True,
+                        help='Decides verbosity of MOHB optimization')
+    parser.add_argument('--runtime', type=float, default=900,
+                        help='Total time in seconds as budget to run MOHB')
     args = parser.parse_args()
     return args
 
@@ -273,11 +269,11 @@ def main():
     cs = get_configspace(args.seed)
     dimensions = len(cs.get_hyperparameters())
 
-    # Some insights into Dask interfaces to DEHB and handling GPU devices for parallelism:
+    # Some insights into Dask interfaces to mohb and handling GPU devices for parallelism:
     # * if args.scheduler_file is specified, args.n_workers need not be specifed --- since
     #    args.scheduler_file indicates a Dask client/server is active
-    # * if args.scheduler_file is not specified and args.n_workers > 1 --- the DEHB object
-    #    creates a Dask client as at instantiation and dies with the associated DEHB object
+    # * if args.scheduler_file is not specified and args.n_workers > 1 --- the mohb object
+    #    creates a Dask client as at instantiation and dies with the associated mohb object
     # * if args.single_node_with_gpus is True --- assumes that all GPU devices indicated
     #    through the environment variable "CUDA_VISIBLE_DEVICES" resides on the same machine
 
@@ -290,10 +286,10 @@ def main():
     else:
         client = None
 
-    objectives = ['loss','n_params']
+    objectives = ['loss', 'n_params']
 
     ###########################
-    # DEHB optimisation block #
+    # mohb optimisation block #
     ###########################
     np.random.seed(args.seed)
 
@@ -315,15 +311,15 @@ def main():
         "num_weights": 100,
     }
     mohb = MOHB(f=objective_function, cs=cs, dimensions=dimensions, min_budget=args.min_budget,
-                  max_budget=args.max_budget, eta=args.eta, output_path=args.output_path,
-                  objectives=objectives, mo_strategy=random_weights_options,
-                  # if client is not None and of type Client, n_workers is ignored
-                  # if client is None, a Dask client with n_workers is set up
-                  client=client, n_workers=args.n_workers)
+                max_budget=args.max_budget, eta=args.eta, output_path=args.output_path,
+                objectives=objectives, mo_strategy=random_weights_options,
+                # if client is not None and of type Client, n_workers is ignored
+                # if client is None, a Dask client with n_workers is set up
+                client=client, n_workers=args.n_workers)
     traj, runtime, history = mohb.run(total_cost=args.runtime, verbose=args.verbose,
-                                                          # arguments below are part of **kwargs shared across workers
-                                                          train_set=train_set, valid_set=valid_set, test_set=test_set,
-                                                          single_node_with_gpus=single_node_with_gpus, device=device)
+                                      # arguments below are part of **kwargs shared across workers
+                                      train_set=train_set, valid_set=valid_set, test_set=test_set,
+                                      single_node_with_gpus=single_node_with_gpus, device=device)
     name = time.strftime("%x %X %Z", time.localtime(mohb.start))
     name = name.replace("/", '-').replace(":", '-').replace(" ", '_')
     mohb.logger.info("Saving optimisation trace history...")
@@ -344,9 +340,10 @@ def main():
         )
         pareto = mohb.pareto_configs
         acc = [train_and_evaluate(pareto_trial.config, args.max_budget, verbose=True,
-                                 train_set=train_set, test_set=test_set, device=device) for pareto_trial in pareto]
+                                  train_set=train_set, test_set=test_set, device=device) for pareto_trial in pareto]
         mohb.logger.info("Test accuracy of {:.3f} for the pareto configurations: ".format(acc))
         mohb.logger.info(f"pareto fitness:{acc}")
+
 
 if __name__ == "__main__":
     main()

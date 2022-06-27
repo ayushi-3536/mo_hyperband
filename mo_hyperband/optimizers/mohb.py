@@ -263,7 +263,6 @@ class MOHB:
         self.futures = []
         self.shared_data = None
         self.iteration_counter = -1
-        self._max_pop_size = None
         self.start = None
         self.active_brackets = []
         self.traj = []
@@ -349,15 +348,14 @@ class MOHB:
         assert budget in bracket.budgets
 
         if budget not in bracket.trials:
-
             # init population randomly for base rung
             if budget == bracket.budgets[0]:
                 logger.debug(f'Randomly initializing population for budget:{budget} and bracket:{bracket.bracket_id}')
                 pop_size = bracket.n_configs[0]
                 population = self.cs.sample_configuration(size=pop_size)
                 trials = [Trial(individual.get_dictionary()) for individual in population]
-                logger.debug(f'Trials generated:{trials}')
-
+                trial_config = [trial.config for trial in trials]
+                logger.debug(f'Trials generated:{trial_config}')
             # Promote candidates from lower budget for next rung
             else:
                 # identify lower budget/fidelity to transfer information from
@@ -373,10 +371,12 @@ class MOHB:
                 # sort candidates according to fitness
                 scalarized_fitness = [self.scalarize(fit) for fit in fitness]
                 sorted_index = np.argsort(scalarized_fitness)
-
+                logger.debug(f'scalarized trials fitness:{scalarized_fitness}')
                 logger.debug(f'sorted index:{sorted_index}')
+
                 trials = np.array(candidate_trials)[sorted_index][:n_configs]
-                logger.debug(f'trial promoted from budget:{lower_budget} to budget:{budget}:{trials}')
+                trial_fitness = [trial.get_fitness() for trial in trials]
+                logger.debug(f'trial promoted from budget:{lower_budget} to budget:{budget}:{trial_fitness}')
 
             # populate the trials for the budget
             bracket.trials[budget] = trials
@@ -643,8 +643,9 @@ class MOHB:
                             "Evaluating a configuration with budget {} under "
                             "bracket ID {}".format(budget, job_info['bracket_id'])
                         )
+                        pareto_fitness = [trial.get_fitness() for trial in self.pareto_trials]
                         self.logger.info(
-                            "Best score seen/Incumbent score: {}".format(self.inc_score)
+                            "Best score seen/Incumbent score: {}".format(pareto_fitness)
                         )
                     self._verbosity_debug()
             self._fetch_results_from_workers()
