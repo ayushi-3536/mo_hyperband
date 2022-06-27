@@ -268,7 +268,7 @@ class MOHB:
         paretos = self.pareto_trials
         paretos.append(trial)
         fitness = [trial.get_fitness() for trial in paretos]
-        logger.debug(f'pareto fitness:{fitness}')
+        logger.debug(f'fitness to be checked for pareto:{fitness}')
         index_list = np.array(range(len(fitness)))
         is_pareto, _ = multi_obj_util.pareto_index(np.array(fitness), index_list)
         self.pareto_trials = list(np.array(paretos)[is_pareto])
@@ -653,7 +653,7 @@ class MOHB:
             configs = [trial.config for trial in self.pareto_trials]
             self.logger.info("Incumbent config: ")
             for config in configs:
-                for k, v in config.get_dictionary().items():
+                for k, v in config.items():
                     self.logger.info("{}: {}".format(k, v))
         self._save_incumbent()
         self._save_history()
