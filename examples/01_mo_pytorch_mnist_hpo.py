@@ -121,7 +121,6 @@ def get_configspace(seed=None):
     cs.add_hyperparameters([batch_size, lr])
     return cs
 
-
 def train(model, device, train_loader, optimizer):
     model.train()
     for batch_idx, (data, target) in list(enumerate(train_loader))[:5]:

@@ -1,4 +1,3 @@
-from typing import List
 import numpy as np
 import sys
 from loguru import logger
@@ -9,8 +8,6 @@ _logger_props = {
     "enqueue": True,
     "rotation": "500 MB"
 }
-
-
 
 
 def pareto_index(costs: np.ndarray, index_list):
@@ -55,4 +52,3 @@ def uniform_from_unit_simplex(dim):
     sample = np.diff(uni, prepend=0) / uni[-1]
     assert sum(sample) - 1 < 1e-6, "Error in weight sampling routine."
     return np.array(sample)
-

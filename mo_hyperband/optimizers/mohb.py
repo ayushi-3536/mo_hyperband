@@ -39,8 +39,7 @@ class MOHB:
         self.mo_strategy = mo_strategy
 
         n_weights = self.mo_strategy.get('num_weights', 100)
-        self.weights = [multi_obj_util.uniform_from_unit_simplex(len(self.objectives))
-                   for _ in range(n_weights)]
+        self.weights = [multi_obj_util.uniform_from_unit_simplex(len(self.objectives)) for _ in range(n_weights)]
 
         # Precomputing budget spacing and number of configurations for HB iterations
         self.max_SH_iter = None
@@ -67,8 +66,6 @@ class MOHB:
 
         self.pareto_trials = []
         self.history = []
-        self.hb_bracket_tracker = {}
-        self._max_pop_size = None
         self.active_brackets = []  # list of SHBracketManager objects
         self.traj = []
         self.runtime = []
@@ -104,9 +101,7 @@ class MOHB:
         Args:
             functional_values: Latest training result status. Reporter requires access to
             all objectives of interest.
-
         """
-
         v = np.array(functional_values)
         if self.mo_strategy["algorithm"] == "random_weights":
             scalarization = max([w @ v for w in self.weights])
@@ -253,25 +248,6 @@ class MOHB:
         self.gpu_usage = dict()
         for _id in self.available_gpus:
             self.gpu_usage[_id] = 0
-
-    def reset(self):
-        super().reset()
-        if self.n_workers > 1 and hasattr(self, "client") and isinstance(self.client, Client):
-            self.client.restart()
-        else:
-            self.client = None
-        self.futures = []
-        self.shared_data = None
-        self.iteration_counter = -1
-        self.start = None
-        self.active_brackets = []
-        self.traj = []
-        self.runtime = []
-        self.pareto_trials = []
-        self.history = []
-        self._get_pop_sizes()
-        self.available_gpus = None
-        self.gpu_usage = None
 
     def clean_inactive_brackets(self):
         """ Removes brackets from the active list if it is done as communicated by Bracket Manager
@@ -676,10 +652,9 @@ class MOHB:
             self.logger.info("pareto score: {}".format([trial.get_fitness() for trial in self.pareto_trials]))
             configs = [trial.config for trial in self.pareto_trials]
             self.logger.info("Incumbent config: ")
-            if self.configspace:
-                for config in configs:
-                    for k, v in config.get_dictionary().items():
-                        self.logger.info("{}: {}".format(k, v))
+            for config in configs:
+                for k, v in config.get_dictionary().items():
+                    self.logger.info("{}: {}".format(k, v))
         self._save_incumbent()
         self._save_history()
         return np.array(self.traj), np.array(self.runtime), np.array(self.history, dtype=object)

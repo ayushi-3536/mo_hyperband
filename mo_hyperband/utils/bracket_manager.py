@@ -70,7 +70,7 @@ class SHBracketManager(object):
         if budget not in self.pending_trials and budget not in self.completed_trials:
             return trials
         pending_trials = [trial for trial in trials if
-                          (budget in self.pending_trials and trial not in self.pending_trials[budget]) and \
+                          (budget in self.pending_trials and trial not in self.pending_trials[budget]) and
                           (budget in self.completed_trials and trial not in self.completed_trials[budget])]
         return pending_trials
 

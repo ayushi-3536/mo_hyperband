@@ -1,4 +1,3 @@
-import numpy as np
 from enum import Enum
 import sys
 from loguru import logger
@@ -9,10 +8,12 @@ _logger_props = {
     "rotation": "500 MB"
 }
 
+
 class Status(Enum):
     PENDING = 'Pending'
     RUNNING = 'Running'
     COMPLETED = 'Completed'
+
 
 class Trial:
     def __init__(self, config):

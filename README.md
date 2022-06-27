@@ -9,13 +9,28 @@ pip install -r requirements.txt
 
 ### Tutorials/Example notebooks
 
-* [04 - MO Hyperparameter Optimization for MNIST in PyTorch](examples/04_mo_pytorch_mnist_hpo.py)
+* [01 - MO Hyperparameter Optimization for MNIST in PyTorch](examples/01_mo_pytorch_mnist_hpo.py)
 
 To run PyTorch example: (*note additional requirements*) 
 ```bash
-PYTHONPATH=$PWD python examples/03_pytorch_mnist_hpo.py \
+PYTHONPATH=$PWD python examples/01_mo_pytorch_mnist_hpo.py \
      --min_budget 1 --max_budget 3 --verbose --runtime 60
 ```
+
+
+### MOHB Hyperparameters
+The Hyperband components:
+* *min\_budget*: Needs to be specified for every MOHB instantiation and is used in determining 
+the budget spacing for the problem at hand.
+* *max\_budget*: Needs to be specified for every MOHB instantiation. Represents the full-budget 
+evaluation or the actual black-box setting.
+* *eta*: (default=3) Sets the aggressiveness of Hyperband's aggressive early stopping by retaining
+1/eta configurations every round
+
+The MO Hyperband components:
+MO_HB uses scalarization algorithms adapted from MOASHA to sort function values for multiple objectives
+* *promotion algorithm*: Allows 'Random Weight', 'Parego', 'Golovin'.
+
 
 ### Running MOHB in a parallel setting
 
@@ -71,25 +86,10 @@ To run the PyTorch MNIST example on a multi-node setup using 4 workers:
 ```bash
 bash utils/run_dask_setup.sh -f dask_dump/scheduler.json -e env_name -n 4
 sleep 5
-PYTHONPATH=$PWD python examples/03_pytorch_mnist_hpo.py --min_budget 1 --max_budget 3 \
+PYTHONPATH=$PWD python examples/01_mo_pytorch_mnist_hpo.py --min_budget 1 --max_budget 3 \
   --verbose --runtime 60 --scheduler_file dask_dump/scheduler.json 
 ```
 
 
 
-### MOHB Hyperparameters
-
-*We recommend the default settings*.
-The default settings were chosen based on ablation studies over a collection of diverse problems 
-and were found to be *generally* useful across all cases tested. 
-However, the parameters are still available for tuning to a specific problem.
-
-The Hyperband components:
-* *min\_budget*: Needs to be specified for every MOHB instantiation and is used in determining 
-the budget spacing for the problem at hand.
-* *max\_budget*: Needs to be specified for every MOHB instantiation. Represents the full-budget 
-evaluation or the actual black-box setting.
-* *eta*: (default=3) Sets the aggressiveness of Hyperband's aggressive early stopping by retaining
-1/eta configurations every round
-  
 
