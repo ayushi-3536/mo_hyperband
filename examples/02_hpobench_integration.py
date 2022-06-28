@@ -22,13 +22,13 @@ adult_benchmark = AdultBenchmark()
 search_space = adult_benchmark.get_configuration_space()
 objectives = adult_benchmark.get_objective_names()
 
+
 def objective_function(config, budget, **kwargs):
     """ The target function to minimize for HPO"""
 
     res = adult_benchmark.objective_function(configuration=config, fidelity={"budget": int(budget)})
-
     res = {
-        'function_value': {'accuracy': res['function_value']['accuracy'],
+        'function_value': {'error': 1 - res['function_value']['accuracy'],
                            'DSP': res['function_value']['accuracy']},
         "cost": res['cost'],
         "info": res['info']
@@ -46,11 +46,11 @@ def input_arguments():
                         help='Refit with incumbent configuration on full training data and budget')
     parser.add_argument('--min_budget', type=float, default=1,
                         help='Minimum budget (epoch length)')
-    parser.add_argument('--max_budget', type=float, default=3,
+    parser.add_argument('--max_budget', type=float, default=200,
                         help='Maximum budget (epoch length)')
     parser.add_argument('--eta', type=int, default=3,
                         help='Parameter for Hyperband controlling early stopping aggressiveness')
-    parser.add_argument('--output_path', type=str, default="./pytorch_mnist_mohb",
+    parser.add_argument('--output_path', type=str, default="./adult_rw",
                         help='Directory for mohb to write logs and outputs')
     parser.add_argument('--scheduler_file', type=str, default=None,
                         help='The file to connect a Dask client with a Dask scheduler')
@@ -73,7 +73,6 @@ def input_arguments():
 def main():
     args = input_arguments()
 
-
     # Some insights into Dask interfaces to mohb and handling GPU devices for parallelism:
     # * if args.scheduler_file is specified, args.n_workers need not be specifed --- since
     #    args.scheduler_file indicates a Dask client/server is active
@@ -90,8 +89,6 @@ def main():
         single_node_with_gpus = False
     else:
         client = None
-
-
 
     ###########################
     # mohb optimisation block #
@@ -117,7 +114,7 @@ def main():
     }
     mohb = MOHB(f=objective_function, cs=search_space, min_budget=args.min_budget,
                 max_budget=args.max_budget, eta=args.eta, output_path=args.output_path,
-                objectives=['accuracy', 'DSP'], mo_strategy=random_weights_options,
+                objectives=['error', 'DSP'], mo_strategy=random_weights_options,
                 # if client is not None and of type Client, n_workers is ignored
                 # if client is None, a Dask client with n_workers is set up
                 client=client, n_workers=args.n_workers)
