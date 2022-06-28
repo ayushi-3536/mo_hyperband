@@ -11,6 +11,7 @@ from distributed import Client
 from mo_hyperband.utils import Trial
 from mo_hyperband.utils import SHBracketManager
 from mo_hyperband.utils import multi_obj_util
+from sklearn.preprocessing import normalize
 
 logger.configure(handlers=[{"sink": sys.stdout, "level": "DEBUG"}])
 _logger_props = {
@@ -344,7 +345,7 @@ class MOHB:
                 fitness = [trial.get_fitness() for trial in candidate_trials]
                 logger.debug(f'trials fitness:{fitness}')
 
-                normalize_fitness = multi_obj_util.normalize(fitness)
+                normalize_fitness = normalize(fitness, axis=0, norm='max')
                 logger.debug(f'normalize fitness:{normalize_fitness}')
 
                 # sort candidates according to fitness

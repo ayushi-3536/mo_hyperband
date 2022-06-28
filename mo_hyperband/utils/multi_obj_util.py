@@ -9,9 +9,6 @@ _logger_props = {
     "rotation": "500 MB"
 }
 
-def normalize(data):
-    return (data - np.min(data)) / (np.max(data) - np.min(data))
-
 def pareto_index(costs: np.ndarray, index_list):
     """
     Find the pareto-optimal points
