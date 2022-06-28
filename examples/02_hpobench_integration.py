@@ -6,6 +6,8 @@ Installation:
 git clone -b development  https://github.com/automl/HPOBench.git
 cd HPOBench
 pip install .
+cd ..
+pip install pygmo~=2.6
 
 """
 
@@ -17,6 +19,7 @@ import numpy as np
 from mo_hyperband import MOHB
 from hpobench.benchmarks.mo.adult_benchmark import AdultBenchmark
 from distributed import Client
+from pygmo import hypervolume
 
 adult_benchmark = AdultBenchmark()
 search_space = adult_benchmark.get_configuration_space()
@@ -64,7 +67,7 @@ def input_arguments():
                              'on the Dask workers created and mapped to the scheduler-file.')
     parser.add_argument('--verbose', action="store_true", default=True,
                         help='Decides verbosity of MOHB optimization')
-    parser.add_argument('--runtime', type=float, default=600,
+    parser.add_argument('--runtime', type=float, default=6,
                         help='Total time in seconds as budget to run MOHB')
     args = parser.parse_args()
     return args
@@ -129,6 +132,12 @@ def main():
     pareto = mohb.pareto_trials
     acc = [trial.get_fitness() for trial in pareto]
     mohb.logger.info(f"pareto fitness:{acc}")
+    with open(args.output_path + '/pareto_front.txt', 'a+')as f:
+        np.savetxt(f, acc)
+
+    hv = hypervolume(acc)
+    mohb.logger.info(f"hypervolume obtained:{hv.compute([1.0, 1.0])}")
+
     # end of HB optimisation
 
 
