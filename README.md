@@ -10,6 +10,7 @@ pip install -r requirements.txt
 ### Tutorials/Example notebooks
 
 * [01 - MO Hyperparameter Optimization for MNIST in PyTorch](examples/01_mo_pytorch_mnist_hpo.py)
+* [02 - HPOBench Integration for adult benchmark](examples/02_hpobench_integration.py)
 
 To run PyTorch example: (*note additional requirements*) 
 ```bash
