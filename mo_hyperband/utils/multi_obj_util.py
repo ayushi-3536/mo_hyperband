@@ -31,7 +31,7 @@ def pareto_index(costs: np.ndarray, index_list):
 
     return is_pareto, index_return
 
-
+# Adapted from Autogluon
 def uniform_from_unit_simplex(dim):
     """Samples a point uniformly at random from the unit simplex using the
     Kraemer Algorithm. The algorithm is described here:

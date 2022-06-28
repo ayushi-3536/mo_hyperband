@@ -324,10 +324,9 @@ def main():
     mohb.logger.info("Saving optimisation trace history...")
     with open(os.path.join(args.output_path, "history_{}.pkl".format(name)), "wb") as f:
         pickle.dump(history, f)
-    pareto = mohb.pareto_configs
+    pareto = mohb.pareto_trials
     acc = [train_and_evaluate(pareto_trial.config, args.max_budget, verbose=True,
                               train_set=train_set, test_set=test_set, device=device) for pareto_trial in pareto]
-    mohb.logger.info("Test accuracy of {:.3f} for the pareto configurations: ".format(acc))
     mohb.logger.info(f"pareto fitness:{acc}")
     # end of HB optimisation
 
@@ -340,7 +339,6 @@ def main():
         pareto = mohb.pareto_configs
         acc = [train_and_evaluate(pareto_trial.config, args.max_budget, verbose=True,
                                   train_set=train_set, test_set=test_set, device=device) for pareto_trial in pareto]
-        mohb.logger.info("Test accuracy of {:.3f} for the pareto configurations: ".format(acc))
         mohb.logger.info(f"pareto fitness:{acc}")
 
 
