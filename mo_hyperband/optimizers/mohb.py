@@ -344,8 +344,11 @@ class MOHB:
                 fitness = [trial.get_fitness() for trial in candidate_trials]
                 logger.debug(f'trials fitness:{fitness}')
 
+                normalize_fitness = multi_obj_util.normalize(fitness)
+                logger.debug(f'normalize fitness:{normalize_fitness}')
+
                 # sort candidates according to fitness
-                scalarized_fitness = [self.scalarize(fit) for fit in fitness]
+                scalarized_fitness = [self.scalarize(fit) for fit in normalize_fitness]
                 sorted_index = np.argsort(scalarized_fitness)
                 logger.debug(f'scalarized trials fitness:{scalarized_fitness}')
                 logger.debug(f'sorted index:{sorted_index}')

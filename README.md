@@ -19,6 +19,10 @@ PYTHONPATH=$PWD python examples/01_mo_pytorch_mnist_hpo.py \
 
 
 ### MOHB Hyperparameters
+The MO Hyperband components:
+MO_HB uses scalarization algorithms adapted from MOASHA to sort function values for multiple objectives
+* *promotion algorithm*: Allows 'Random Weight', 'Parego', 'Golovin'.
+
 The Hyperband components:
 * *min\_budget*: Needs to be specified for every MOHB instantiation and is used in determining 
 the budget spacing for the problem at hand.
@@ -27,9 +31,6 @@ evaluation or the actual black-box setting.
 * *eta*: (default=3) Sets the aggressiveness of Hyperband's aggressive early stopping by retaining
 1/eta configurations every round
 
-The MO Hyperband components:
-MO_HB uses scalarization algorithms adapted from MOASHA to sort function values for multiple objectives
-* *promotion algorithm*: Allows 'Random Weight', 'Parego', 'Golovin'.
 
 
 ### Running MOHB in a parallel setting
@@ -62,7 +63,7 @@ to it by that MOHB run.
 
 To run the PyTorch MNIST example on a single node using 2 workers:  
 ```bash
-PYTHONPATH=$PWD python examples/03_pytorch_mnist_hpo.py --min_budget 1 --max_budget 3 \
+PYTHONPATH=$PWD python examples/01_mo_pytorch_mnist_hpo.py --min_budget 1 --max_budget 3 \
   --verbose --runtime 60 --n_workers 2 --single_node_with_gpus
 ```
 
