@@ -138,11 +138,16 @@ def main():
     pareto = mohb.pareto_trials
     acc = [trial.get_fitness() for trial in pareto]
     mohb.logger.info(f"pareto fitness:{acc}")
-    with open(os.path.join(args.output_path, '/pareto_front_{}.txt'.format(name)), 'wb')as f:
+    with open(os.path.join(args.output_path, 'pareto_front_{}.txt'.format(name)), 'wb')as f:
         np.savetxt(f, acc)
-
-    hv = hypervolume(acc)
-    mohb.logger.info(f"hypervolume obtained:{hv.compute([1.0, 1.0])}")
+    with open(os.path.join(args.output_path, 'hypervolume_{}.txt'.format(name)), 'wb')as f:
+        hypervolume_over_time = []
+        for pareto in traj:
+            mohb.logger.debug(f'pareto:{pareto}')
+            hv = hypervolume(pareto)
+            print("huv", hv.compute([1.0, 1.0]))
+            hypervolume_over_time.append(hv.compute([1.0, 1.0]))
+        np.savetxt(f, hypervolume_over_time)
 
     # end of HB optimisation
 

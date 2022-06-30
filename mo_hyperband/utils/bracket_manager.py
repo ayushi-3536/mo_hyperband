@@ -102,7 +102,7 @@ class SHBracketManager(object):
         assert budget in self.budgets
         assert self.sh_bracket[budget] > 0
         self.sh_bracket[budget] -= 1
-
+        trial.start_trial(budget)
         if budget in self.pending_trials:
             self.pending_trials[budget].append(trial)
         else:
@@ -112,7 +112,7 @@ class SHBracketManager(object):
             # increment current rung if no jobs left in the rung
             self.current_rung = (self.current_rung + 1) % self.n_rungs
 
-    def complete_job(self, budget, trial, fitness):
+    def complete_job(self, budget, run_info):
         """ Notifies the bracket that a job for a budget has been completed
 
         This function must be called when a config for a budget has finished evaluation to inform
@@ -124,8 +124,13 @@ class SHBracketManager(object):
         assert self._sh_bracket[budget] < _max_configs
         self._sh_bracket[budget] += 1
 
+        trial = run_info["trial"]
+        logger.debug(f'After trial:{trial.config},fitness:{trial._fitness},'
+                     f' status:{trial._status}, meta_info:{trial._metainfo}')
+        fitness = list(run_info["fitness"].values())
+
         # set fitness for Trial
-        trial.finish_trial(fitness)
+        trial.finish_trial(fitness, run_info['meta_data'])
 
         if budget in self.completed_trials:
             self.completed_trials[budget].append(trial)

@@ -13,6 +13,8 @@ from mo_hyperband.utils import SHBracketManager
 from mo_hyperband.utils import multi_obj_util
 from sklearn.preprocessing import normalize
 
+from pygmo import hypervolume
+
 logger.configure(handlers=[{"sink": sys.stdout, "level": "DEBUG"}])
 _logger_props = {
     "format": "{time} {level} {message}",
@@ -54,6 +56,7 @@ class MOHB:
             self.budgets = self.max_budget * np.power(self.eta,
                                                       -np.linspace(start=self.max_SH_iter - 1,
                                                                    stop=0, num=self.max_SH_iter))
+            self.budgets = [budget.astype(np.int64) for budget in self.budgets]
 
         # Miscellaneous
         self.output_path = kwargs['output_path'] if 'output_path' in kwargs else './'
@@ -199,7 +202,8 @@ class MOHB:
             'budget': budget,
             'trial': job_info['trial'],
             'bracket_id': bracket_id,
-            'info': info
+            'info': info,
+            'meta_data': res
         }
 
         if "gpu_devices" in job_info:
@@ -260,7 +264,7 @@ class MOHB:
         self.history.append(history)
 
     def _update_pareto(self, trial):
-        paretos = self.pareto_trials
+        paretos = self.pareto_trials.copy()
         paretos.append(trial)
         fitness = [trial.get_fitness() for trial in paretos]
         logger.debug(f'fitness to be checked for pareto:{fitness}')
@@ -324,8 +328,8 @@ class MOHB:
                 logger.debug(f'Randomly initializing population for budget:{budget} and bracket:{bracket.bracket_id}')
                 pop_size = bracket.n_configs[0]
                 population = self.cs.sample_configuration(size=pop_size)
-                trials = [Trial(individual.get_dictionary()) for individual in population]
-                trial_config = [trial.config for trial in trials]
+                candidate_trials = [Trial(individual.get_dictionary()) for individual in population]
+                trial_config = [trial.config for trial in candidate_trials]
                 logger.debug(f'Trials generated:{trial_config}')
             # Promote candidates from lower budget for next rung
             else:
@@ -344,12 +348,16 @@ class MOHB:
 
                 # sort candidates according to fitness
                 sorted_index = self.sort_indices(normalize_fitness, n_configs)
+                logger.debug(f'sorted index:{sorted_index}')
                 trials = np.array(candidate_trials)[sorted_index]
                 trial_fitness = [trial.get_fitness() for trial in trials]
                 logger.debug(f'trial promoted from budget:{lower_budget} to budget:{budget}:{trial_fitness}')
 
+                # Create new instances to not lose information
+                candidate_trials = [Trial(trial.config) for trial in trials]
+
             # populate the trials for the budget
-            bracket.trials[budget] = trials
+            bracket.trials[budget] = candidate_trials
 
         logger.debug(f'budget:{budget}')
         pending_trials = bracket.get_pending_trials(budget)
@@ -424,6 +432,9 @@ class MOHB:
         for bracket in self.active_brackets:
             if bracket.bracket_id == job_info['bracket_id']:
                 # registering is IMPORTANT for Bracket Manager to perform SH
+                trial = job_info['trial']
+                logger.debug(f'trial:{trial.config},fitness:{trial._fitness},'
+                             f' status:{trial._status}, meta_info:{trial._metainfo}')
                 bracket.register_job(job_info['budget'], job_info['trial'])
                 break
 
@@ -463,13 +474,11 @@ class MOHB:
                 if bracket.bracket_id == bracket_id:
                     # bracket job complete
                     logger.debug(f'fitness for config:{list(fitness.values())}')
-                    bracket.complete_job(budget, run_info["trial"],
-                                         list(fitness.values()))  # IMPORTANT to perform synchronous SH
+                    bracket.complete_job(budget, run_info)  # IMPORTANT to perform synchronous SH
 
-                # updating pareto
-                self._update_pareto(
-                    trial=run_info['trial']
-                )
+            # updating pareto
+            self._update_pareto(
+                trial=run_info['trial'])
             # book-keeping
             pareto_fitness = [trial.get_fitness() for trial in self.pareto_trials]
             self._update_trackers(

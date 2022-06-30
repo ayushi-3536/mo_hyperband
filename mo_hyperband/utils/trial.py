@@ -20,6 +20,8 @@ class Trial:
         self.config = config
         self._fitness = None
         self._status = Status.PENDING.value
+        self._budget = None
+        self._metainfo = {}
 
     def get_status(self):
         return self._status
@@ -27,10 +29,12 @@ class Trial:
     def get_fitness(self):
         return self._fitness
 
-    def finish_trial(self, fitness):
+    def finish_trial(self, fitness, meta_info):
         self._fitness = fitness
         self._status = Status.COMPLETED.value
+        self._metainfo = meta_info
         logger.debug(f'fitness:{self._fitness}')
 
-    def start_trial(self):
+    def start_trial(self, budget):
+        self._budget = int(budget)
         self._status = Status.RUNNING

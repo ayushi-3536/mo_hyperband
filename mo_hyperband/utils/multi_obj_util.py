@@ -138,6 +138,7 @@ def get_eps_net_ranking(points, num_top):
     :return: List of num_top indices
     """
     _, fronts = fast_nondominated_sort(points, num_top)
+    logger.debug(f'fronts:{fronts}')
     ranked_ids = []
 
     i = 0
