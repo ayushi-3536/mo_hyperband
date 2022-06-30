@@ -39,8 +39,10 @@ class MOHB:
         self.objectives = objectives
         self.mo_strategy = mo_strategy
 
-        n_weights = self.mo_strategy.get('num_weights', 100)
-        self.weights = [multi_obj_util.uniform_from_unit_simplex(len(self.objectives)) for _ in range(n_weights)]
+        if self.mo_strategy['algorithm'] in multi_obj_util.scalarization_strategy:
+            n_weights = self.mo_strategy.get('num_weights', 100)
+            self.weights = [multi_obj_util.uniform_from_unit_simplex(len(self.objectives)) for _ in range(n_weights)]
+            logger.debug(f'weights:{self.weights}')
 
         # Precomputing budget spacing and number of configurations for HB iterations
         self.max_SH_iter = None
@@ -95,28 +97,20 @@ class MOHB:
         self.gpu_usage = None
         self.single_node_with_gpus = None
 
-    # Adapted from Autogluon
-    def scalarize(self, functional_values):
-        """Report updated training status.
-
-        Args:
-            functional_values: Latest training result status. Reporter requires access to
-            all objectives of interest.
-        """
-        v = np.array(functional_values)
-        if self.mo_strategy["algorithm"] == "random_weights":
-            scalarization = max([w @ v for w in self.weights])
-        elif self.mo_strategy["algorithm"] == "parego":
-            rho = self.scalarization_options["rho"]
-            scalarization = [max(w * v) + rho * (w @ v) for w in self.weights]
-            scalarization = max(scalarization)
-        elif self.mo_strategy["algorithm"] == "golovin":
-            scalarization = [np.min(np.clip(v / w, a_min=0, a_max=None)) ** len(w) for w in self.weights]
-            scalarization = max(scalarization)
+    def sort_indices(self, cost, n_configs):
+        if self.mo_strategy["algorithm"] == "EPSNET":
+            ranked_top = multi_obj_util.get_eps_net_ranking(cost, n_configs)
+        elif self.mo_strategy["algorithm"] == "NSGA-II":
+            ranked_top = multi_obj_util.get_nsga_ii_ranking(cost, n_configs)
+        elif self.mo_strategy["algorithm"] in multi_obj_util.scalarization_strategy:
+            ranked_top = multi_obj_util.get_scalarization_ranking(cost,
+                                                                  n_configs,
+                                                                  self.mo_strategy,
+                                                                  self.weights)
         else:
-            raise ValueError("Specified scalarization algorithm is unknown. \
-                Valid algorithms are 'random_weights' and 'parego'.")
-        return scalarization
+            raise ValueError("Specified algorithm is unknown. \
+                       Valid algorithms are 'random_weights', 'parego', golovin, NSGA-II and EPSNET.")
+        return ranked_top
 
     def reset(self):
         self.pareto_trials = []
@@ -349,12 +343,8 @@ class MOHB:
                 logger.debug(f'normalize fitness:{normalize_fitness}')
 
                 # sort candidates according to fitness
-                scalarized_fitness = [self.scalarize(fit) for fit in normalize_fitness]
-                sorted_index = np.argsort(scalarized_fitness)
-                logger.debug(f'scalarized trials fitness:{scalarized_fitness}')
-                logger.debug(f'sorted index:{sorted_index}')
-
-                trials = np.array(candidate_trials)[sorted_index][:n_configs]
+                sorted_index = self.sort_indices(normalize_fitness, n_configs)
+                trials = np.array(candidate_trials)[sorted_index]
                 trial_fitness = [trial.get_fitness() for trial in trials]
                 logger.debug(f'trial promoted from budget:{lower_budget} to budget:{budget}:{trial_fitness}')
 

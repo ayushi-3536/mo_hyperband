@@ -115,6 +115,12 @@ def main():
         "algorithm": "golovin",
         "num_weights": 100,
     }
+    nsga_ii_options = {
+        "algorithm": "NSGA-II"
+    }
+    epsnet_options = {
+        "algorithm": "EPSNET"
+    }
     mohb = MOHB(f=objective_function, cs=search_space, min_budget=args.min_budget,
                 max_budget=args.max_budget, eta=args.eta, output_path=args.output_path,
                 objectives=['error', 'DSP'], mo_strategy=random_weights_options,
@@ -132,7 +138,7 @@ def main():
     pareto = mohb.pareto_trials
     acc = [trial.get_fitness() for trial in pareto]
     mohb.logger.info(f"pareto fitness:{acc}")
-    with open(args.output_path + '/pareto_front.txt', 'a+')as f:
+    with open(os.path.join(args.output_path, '/pareto_front_{}.txt'.format(name)), 'wb')as f:
         np.savetxt(f, acc)
 
     hv = hypervolume(acc)
