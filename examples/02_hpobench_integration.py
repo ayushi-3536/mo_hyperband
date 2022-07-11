@@ -123,11 +123,12 @@ def main():
     }
     mohb = MOHB(f=objective_function, cs=search_space, min_budget=args.min_budget,
                 max_budget=args.max_budget, eta=args.eta, output_path=args.output_path,
-                objectives=['error', 'DSP'], mo_strategy=random_weights_options,
+                objectives=['error', 'DSP'], mo_strategy=epsnet_options,
                 # if client is not None and of type Client, n_workers is ignored
                 # if client is None, a Dask client with n_workers is set up
                 client=client, n_workers=args.n_workers)
-    traj, runtime, history = mohb.run(total_cost=args.runtime, verbose=args.verbose,
+    runtime, history = mohb.run(total_cost=args.runtime, verbose=args.verbose,
+                                      save_intermediate=False,
                                       # arguments below are part of **kwargs shared across workers
                                       single_node_with_gpus=single_node_with_gpus)
     name = time.strftime("%x %X %Z", time.localtime(mohb.start))
@@ -140,14 +141,6 @@ def main():
     mohb.logger.info(f"pareto fitness:{acc}")
     with open(os.path.join(args.output_path, 'pareto_front_{}.txt'.format(name)), 'wb')as f:
         np.savetxt(f, acc)
-    with open(os.path.join(args.output_path, 'hypervolume_{}.txt'.format(name)), 'wb')as f:
-        hypervolume_over_time = []
-        for pareto in traj:
-            mohb.logger.debug(f'pareto:{pareto}')
-            hv = hypervolume(pareto)
-            print("huv", hv.compute([1.0, 1.0]))
-            hypervolume_over_time.append(hv.compute([1.0, 1.0]))
-        np.savetxt(f, hypervolume_over_time)
 
     # end of HB optimisation
 

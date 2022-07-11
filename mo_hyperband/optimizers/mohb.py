@@ -13,8 +13,6 @@ from mo_hyperband.utils import SHBracketManager
 from mo_hyperband.utils import multi_obj_util
 from sklearn.preprocessing import normalize
 
-from pygmo import hypervolume
-
 logger.configure(handlers=[{"sink": sys.stdout, "level": "DEBUG"}])
 _logger_props = {
     "format": "{time} {level} {message}",
@@ -70,10 +68,10 @@ class MOHB:
         )
         self.log_filename = "{}/mohb_{}.log".format(self.output_path, log_suffix)
 
+        self.trials = []
         self.pareto_trials = []
         self.history = []
         self.active_brackets = []  # list of SHBracketManager objects
-        self.traj = []
         self.runtime = []
         self.history = []
         self.start = None
@@ -116,7 +114,7 @@ class MOHB:
         return ranked_top
 
     def reset(self):
-        self.pareto_trials = []
+        self.trials = []
         self.population = None
         self.fitness = None
         self.traj = []
@@ -258,19 +256,16 @@ class MOHB:
         ]
         return
 
-    def _update_trackers(self, traj, runtime, history):
-        self.traj.append(traj)
+    def _update_trackers(self, runtime, history):
         self.runtime.append(runtime)
         self.history.append(history)
 
-    def _update_pareto(self, trial):
-        paretos = self.pareto_trials.copy()
-        paretos.append(trial)
-        fitness = [trial.get_fitness() for trial in paretos]
+    def _update_pareto(self):
+        fitness = [trial.get_fitness() for trial in self.trials]
         logger.debug(f'fitness to be checked for pareto:{fitness}')
         index_list = np.array(range(len(fitness)))
         is_pareto, _ = multi_obj_util.pareto_index(np.array(fitness), index_list)
-        self.pareto_trials = list(np.array(paretos)[is_pareto])
+        return list(np.array(self.trials)[is_pareto])
 
     def _get_pop_sizes(self):
         """Determines maximum pop size for each budget
@@ -476,16 +471,10 @@ class MOHB:
                     logger.debug(f'fitness for config:{list(fitness.values())}')
                     bracket.complete_job(budget, run_info)  # IMPORTANT to perform synchronous SH
 
-            # updating pareto
-            self._update_pareto(
-                trial=run_info['trial'])
             # book-keeping
-            pareto_fitness = [trial.get_fitness() for trial in self.pareto_trials]
-            self._update_trackers(
-                traj=pareto_fitness, runtime=cost, history=(
-                    config, dict(fitness), float(cost), float(budget), info
-                )
-            )
+            self.trials.append(run_info['trial'])
+            self._update_trackers(runtime=cost, history=(
+                config, dict(fitness), float(cost), float(budget), info))
         # remove processed future
         self.futures = np.delete(self.futures, [i for i, _ in done_list]).tolist()
 
@@ -517,6 +506,7 @@ class MOHB:
         return False
 
     def _save_incumbent(self, name=None):
+        self.pareto_trials = self._update_pareto()
 
         if name is None:
             name = time.strftime("%x %X %Z", time.localtime(self.start))
@@ -622,13 +612,14 @@ class MOHB:
                             "Evaluating a configuration with budget {} under "
                             "bracket ID {}".format(budget, job_info['bracket_id'])
                         )
+                        self.pareto_trials = self._update_pareto()
                         pareto_fitness = [trial.get_fitness() for trial in self.pareto_trials]
                         self.logger.info(
                             "Best score seen/Incumbent score: {}".format(pareto_fitness)
                         )
                     self._verbosity_debug()
             self._fetch_results_from_workers()
-            if save_intermediate and self.pareto_trials is not None:
+            if save_intermediate and self.trials is not None:
                 self._save_incumbent()
             if save_history and self.history is not None:
                 self._save_history()
@@ -641,11 +632,14 @@ class MOHB:
             )
         while len(self.futures) > 0:
             self._fetch_results_from_workers()
-            if save_intermediate and self.pareto_trials is not None:
+            if save_intermediate and self.trials is not None:
                 self._save_incumbent()
             if save_history and self.history is not None:
                 self._save_history()
             time.sleep(0.05)  # waiting 50ms
+
+        self._save_incumbent()
+        self._save_history()
 
         if verbose:
             time_taken = time.time() - self.start
@@ -658,6 +652,5 @@ class MOHB:
             for config in configs:
                 for k, v in config.items():
                     self.logger.info("{}: {}".format(k, v))
-        self._save_incumbent()
-        self._save_history()
-        return np.array(self.traj), np.array(self.runtime), np.array(self.history, dtype=object)
+
+        return np.array(self.runtime), np.array(self.history, dtype=object)
